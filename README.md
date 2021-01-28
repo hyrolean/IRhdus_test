@@ -3,6 +3,10 @@ IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
 
 ## HDUSのリモコンの受光部だけArduinoのATmega32U4のUSBデバイス機能のキーボードエミュで作ってみるテスト
 
+### [3rd release revised](../../releases/tag/3rd_rev)
+
+  - サスペンドから復帰時、誤動作防止の為、サスペンド状態の判定に遊びを持たせる工程を追加
+
 ### [3rd release](../../releases/tag/3rd)
 
   - サスペンドからの復帰時に自己リセットして修復させる機能を追加
