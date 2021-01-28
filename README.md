@@ -3,6 +3,19 @@ IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
 
 ## HDUSのリモコンの受光部だけArduinoのATmega32U4のUSBデバイス機能でキーボードエミュで作ってみるテスト
 
+### [3rd release](../../releases/tag/3rd)
+
+  - サスペンドからの復帰時に自己リセットして修復させる機能を追加
+
+  と、その写真と配線図。
+  ![3rd写真](https://i.imgur.com/bC9SBAB.jpg)
+
+  ![3rd配線図](https://i.imgur.com/hqSY334.gif)
+
+  緑枠の部分を組み上げるとレジューム時に自己リセット機能が働くようになる(実装しなくても動作可)。
+  リセットボタンはProMicroだとスケッチアップロードに失敗した場合などに2回連打すると8秒間だけLeonardoに偽装できるのであると便利。
+
+
 ### [2nd release](../../releases/tag/2nd)
 
   - サスペンド中のPCをHDUSリモコンの電源ボタン押下で復帰させる機能を追加
