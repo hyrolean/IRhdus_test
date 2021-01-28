@@ -1,31 +1,42 @@
-// IR HDUS Test for Arduino Leonardo / Micro / Pro Micro
-//  by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+// IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
+//  2nd released by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+//   - Fixed the USB recover failing problem when resuming a suspended PC.
+//   - Added the feature to wakeup a suspended PC by pressing the POWER button.
+//  1st released @ https://pastebin.com/1zycyEMD
 #include <IRremote.h>
 #include "Keyboard.h"
+
+#define SUPPORT_WAKEUP_HOST 1 // Feature to wakeup a suspended PC [0/1]
 
 const int RECV_PIN = 9;    // IR Signal digital input pin#
 const int ACTIVE_PIN = 10; // Active LED digital output pin#
 
 IRrecv irrecv(RECV_PIN);
 
-decode_results results;
+using msec_t = decltype(millis()) ;
+using ircode_t = decltype(decode_results::value) ;
 
-using milli_t = decltype(millis()) ;
+msec_t last_pressed = 0 ;
+const msec_t RELEASE_WAIT = 120 ;
+const msec_t IDLE_DELAY = 10 ;
+const msec_t SUSPENDED_DELAY = 500 ;
+const msec_t RESUME_DELAY = 1000 ;
 
-milli_t last_pressed = 0 ;
-const milli_t release_wait = 120 ;
-const milli_t idle_delay = 10 ;
+const ircode_t REPEAT_CODE = 0xFFFFFFFFUL ;
 
-bool ircode_kx(decltype(decode_results::value) ircode)
+bool suspended=true ;
+
+bool ircode_kx(ircode_t ircode)
 {
-  char k=0 ; // Key code
+  unsigned char k=0 ; // Key code
   bool c=false,s=false ; // Modifier [Ctrl/Shift]
+  bool p=false ; // POWER pressed
   switch(ircode) { // Identify the ir code is valid or not
     case 0x50EF01FE:    //画面表示
       s=true; k=KEY_F13; break;
 
     case 0x50EF817E:    //POWER
-      s=true; k=KEY_F14; break;
+      s=p=true; k=KEY_F14; break;
 
     case 0x50EF41BE:    //消音
       s=true; k=KEY_F15; break;
@@ -158,10 +169,18 @@ bool ircode_kx(decltype(decode_results::value) ircode)
 
   }
   if(k) { // Valid ir code
-    // Simulate a keyboard event
-    if(c) Keyboard.press(KEY_LEFT_CTRL) ;
-    if(s) Keyboard.press(KEY_LEFT_SHIFT) ;
-    Keyboard.press(k) ;
+    if(suspended) {
+      #if SUPPORT_WAKEUP_HOST
+      // Wakeup a supended PC
+      if(p) USBDevice.wakeupHost();
+      #endif
+      return false ;
+    }else {
+      // Emulate a keyboard event
+      if(c) Keyboard.press(KEY_LEFT_CTRL) ;
+      if(s) Keyboard.press(KEY_LEFT_SHIFT) ;
+      Keyboard.press(k) ;
+    }
     return true ;
   }
   // Invalid ir code
@@ -171,34 +190,56 @@ bool ircode_kx(decltype(decode_results::value) ircode)
 void setup()
 {
   pinMode(ACTIVE_PIN,OUTPUT);
-  Serial.begin(9600);
   irrecv.enableIRIn(); // Start the receiver
-  Serial.println("HDUS receiver started.");
 }
 
 void loop()
 {
-  auto dur=[](milli_t s=0, milli_t e=millis()) -> decltype(e-s) {
+  auto dur=[](msec_t s=0, msec_t e=millis()) -> decltype(e-s) {
       // duration ( s -> e )
       return s <= e ? e - s : ~s + 1 + e;
   };
 
+  static decode_results results;
+
+  if(USBDevice.isSuspended()) {
+    if(!suspended) {
+      Keyboard.end() ;
+      Serial.end() ;
+      #if !SUPPORT_WAKEUP_HOST
+      USBDevice.detach();
+      #endif
+      suspended=true ;
+    }
+  }else if(suspended) {
+    digitalWrite(ACTIVE_PIN,HIGH) ;
+    delay(RESUME_DELAY) ;
+    #if !SUPPORT_WAKEUP_HOST
+    USBDevice.attach();
+    #endif
+    Serial.begin(9600);
+    Serial.println("HDUS receiver resumed.");
+    Keyboard.begin() ;
+    suspended=false ;
+    digitalWrite(ACTIVE_PIN,LOW) ;
+  }
+
   if (irrecv.decode(&results)) {
-    Serial.println(results.value, HEX);
-    if( (last_pressed&&results.value==0xFFFFFFFFUL) ||
+    if(!suspended) Serial.println(results.value, HEX);
+    if( (last_pressed&&results.value==REPEAT_CODE) ||
         ircode_kx(results.value) ) {
       last_pressed = dur() ;
       digitalWrite(ACTIVE_PIN,HIGH) ;
     }
     irrecv.resume(); // Receive the next value
   }else {
-    if(last_pressed>0) {
-      if(dur(last_pressed)>=release_wait) {
-        Keyboard.releaseAll();
+    if(last_pressed) {
+      if(dur(last_pressed)>=RELEASE_WAIT) {
+        if(!suspended) Keyboard.releaseAll();
         digitalWrite(ACTIVE_PIN,LOW) ;
         last_pressed=0 ;
       }
     }else
-      delay(idle_delay) ;
+      delay(suspended?SUSPENDED_DELAY:IDLE_DELAY) ;
   }
 }
