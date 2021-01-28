@@ -1,7 +1,7 @@
 # IRhdus_test
 IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
 
-##HDUSのリモコンの受光部だけArduinoのATmega32U4のUSBデバイス機能でキーボードエミュで作ってみるテスト
+## HDUSのリモコンの受光部だけArduinoのATmega32U4のUSBデバイス機能でキーボードエミュで作ってみるテスト
 
 ### 1st release
 
