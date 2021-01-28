@@ -1,15 +1,18 @@
 // IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
-//  2nd released by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+//  3rd released by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+//   - Improved the resuming feature to auto-reset with CTRL_RESET_PIN#8.
+//  2nd released @ https://pastebin.com/kT0p2CxQ
 //   - Fixed the USB recover failing problem when resuming a suspended PC.
 //   - Added the feature to wakeup a suspended PC by pressing the POWER button.
 //  1st released @ https://pastebin.com/1zycyEMD
-#include <IRremote.h>
+#include <IRremote.h> // https://github.com/z3t0/Arduino-IRremote
 #include "Keyboard.h"
 
 #define SUPPORT_WAKEUP_HOST 1 // Feature to wakeup a suspended PC [0/1]
 
-const int RECV_PIN = 9;    // IR Signal digital input pin#
-const int ACTIVE_PIN = 10; // Active LED digital output pin#
+const int RECV_PIN = 9;         // IR Signal digital input pin#
+const int ACTIVE_PIN = 10;      // Active LED digital output pin#
+const int CTRL_RESET_PIN = 8;   // Control to reset digital output pin#
 
 IRrecv irrecv(RECV_PIN);
 
@@ -171,8 +174,11 @@ bool ircode_kx(ircode_t ircode)
   if(k) { // Valid ir code
     if(suspended) {
       #if SUPPORT_WAKEUP_HOST
-      // Wakeup a supended PC
-      if(p) USBDevice.wakeupHost();
+      // Wakeup a suspended PC
+      if(p) {
+        USBDevice.wakeupHost();
+        return true ;
+      }
       #endif
       return false ;
     }else {
@@ -187,10 +193,38 @@ bool ircode_kx(ircode_t ircode)
   return false ;
 }
 
+void do_resume()
+{
+  digitalWrite(ACTIVE_PIN,HIGH) ;
+  delay(RESUME_DELAY) ;
+  #if !SUPPORT_WAKEUP_HOST
+  USBDevice.attach();
+  #endif
+  Serial.begin(9600);
+  Serial.println("HDUS receiver resumed.");
+  Keyboard.begin() ;
+  digitalWrite(ACTIVE_PIN,LOW) ;
+}
+
+void do_suspend()
+{
+  Keyboard.end() ;
+  Serial.end() ;
+  #if !SUPPORT_WAKEUP_HOST
+  USBDevice.detach();
+  #endif
+}
+
 void setup()
 {
   pinMode(ACTIVE_PIN,OUTPUT);
+  digitalWrite(ACTIVE_PIN,LOW) ;
+  pinMode(CTRL_RESET_PIN,OUTPUT) ;
+  digitalWrite(CTRL_RESET_PIN,LOW) ;
+  while(USBDevice.isSuspended())
+    delay(SUSPENDED_DELAY) ;
   irrecv.enableIRIn(); // Start the receiver
+  do_resume() ; suspended=false ;
 }
 
 void loop()
@@ -204,37 +238,31 @@ void loop()
 
   if(USBDevice.isSuspended()) {
     if(!suspended) {
-      Keyboard.end() ;
-      Serial.end() ;
-      #if !SUPPORT_WAKEUP_HOST
-      USBDevice.detach();
-      #endif
+      do_suspend();
       suspended=true ;
     }
   }else if(suspended) {
-    digitalWrite(ACTIVE_PIN,HIGH) ;
-    delay(RESUME_DELAY) ;
-    #if !SUPPORT_WAKEUP_HOST
-    USBDevice.attach();
-    #endif
-    Serial.begin(9600);
-    Serial.println("HDUS receiver resumed.");
-    Keyboard.begin() ;
+    if(last_pressed) {
+      auto d=dur(last_pressed) ;
+      if(d<RESUME_DELAY) delay(RESUME_DELAY-d) ;
+    }
+    digitalWrite(CTRL_RESET_PIN,HIGH) ;
+    do_resume();
+    digitalWrite(CTRL_RESET_PIN,LOW) ;
     suspended=false ;
-    digitalWrite(ACTIVE_PIN,LOW) ;
   }
 
   if (irrecv.decode(&results)) {
     if(!suspended) Serial.println(results.value, HEX);
     if( (last_pressed&&results.value==REPEAT_CODE) ||
         ircode_kx(results.value) ) {
-      last_pressed = dur() ;
+      if(auto d = dur()) last_pressed=d ; else last_pressed=1 ;
       digitalWrite(ACTIVE_PIN,HIGH) ;
     }
     irrecv.resume(); // Receive the next value
   }else {
     if(last_pressed) {
-      if(dur(last_pressed)>=RELEASE_WAIT) {
+      if(dur(last_pressed)>=(suspended?RESUME_DELAY:RELEASE_WAIT)) {
         if(!suspended) Keyboard.releaseAll();
         digitalWrite(ACTIVE_PIN,LOW) ;
         last_pressed=0 ;
