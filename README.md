@@ -40,6 +40,6 @@ IR HDUS Test for Arduino Leonardo / Micro / Pro Micro ( ATmega32U4 )
 
   ProMicroのブレッドボードのサンプル画像。
   上の配線図と違うところは、IRのピンが９pinでLEDのピンを10pinに接続するところ。
-  ![ProMicro配線図](https://i.imgur.com/jP7wmfe.jpg)
+  ![ProMicro配線図](https://i.imgur.com/MqJ6tsV.jpg)
 
   動作テストしたところ、HDUSリモコンだけWin10の64ビットで動作することを確認。
